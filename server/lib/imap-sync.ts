@@ -21,7 +21,7 @@ export async function startIMAPSync(account: EmailAccount) {
 
     const imap = new Imap({
       user: account.imapUser,
-      password: account.imapPassword,
+      password: account.imapPassword.replace(/\s/g, ''),
       host: account.imapHost,
       port: account.imapPort,
       tls: true,

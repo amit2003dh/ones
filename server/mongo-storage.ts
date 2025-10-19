@@ -32,7 +32,9 @@ export class MongoStorage implements IStorage {
   private knowledgeCollection: Collection<KnowledgeBaseDoc> | null = null;
 
   constructor(connectionString: string) {
-    this.client = new MongoClient(connectionString);
+    this.client = new MongoClient(connectionString, {
+      serverSelectionTimeoutMS: 30000,
+    });
   }
 
   async connect(): Promise<void> {
