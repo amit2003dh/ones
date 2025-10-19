@@ -18,6 +18,9 @@ function getAddressText(address: AddressObject | AddressObject[] | undefined): s
 // Active IMAP connections
 const activeConnections = new Map<string, Imap>();
 
+// Simple retry counter per account for transient errors
+const retryCounts = new Map<string, number>();
+
 // Start IMAP sync for an account
 export async function startIMAPSync(account: EmailAccount) {
   try {
@@ -58,13 +61,56 @@ export async function startIMAPSync(account: EmailAccount) {
       });
     });
 
-    imap.once("error", (err: Error) => {
+    imap.once("error", (err: any) => {
+      // Do not log sensitive information here (no passwords printed)
+      const textCode = err && err.textCode ? String(err.textCode) : undefined;
+
+      if (textCode === "AUTHENTICATIONFAILED") {
+        console.error(`IMAP authentication failed for ${account.email}.`);
+        console.error("Action required: update the account credentials (app password or OAuth token). This account will be stopped until credentials are corrected.");
+
+        // Stop further sync attempts for this account
+        try {
+          stopIMAPSync(account.id);
+        } catch (e) {
+          // swallow
+        }
+
+        return;
+      }
+
       console.error(`IMAP error for ${account.email}:`, err);
+
+      // For other transient errors, attempt a few reconnects with backoff
+      const currentRetries = retryCounts.get(account.id) || 0;
+      if (currentRetries >= 3) {
+        console.error(`IMAP transient error: reached retry limit for ${account.email}. Stopping sync.`);
+        try { stopIMAPSync(account.id); } catch (e) {}
+        return;
+      }
+
+      const nextRetry = currentRetries + 1;
+      retryCounts.set(account.id, nextRetry);
+      const backoffMs = Math.min(30_000, 1000 * Math.pow(2, nextRetry));
+      console.log(`IMAP transient error for ${account.email}. Retrying in ${backoffMs}ms (${nextRetry}/3)`);
+
+      setTimeout(() => {
+        // Clean up previous connection reference and try reconnecting
+        try {
+          const existing = activeConnections.get(account.id);
+          existing?.end();
+          activeConnections.delete(account.id);
+        } catch (e) {}
+
+        // Re-attempt startIMAPSync (will create a fresh connection)
+        startIMAPSync(account).catch(() => {});
+      }, backoffMs);
     });
 
     imap.once("end", () => {
       console.log(`IMAP connection ended for ${account.email}`);
       activeConnections.delete(account.id);
+      retryCounts.delete(account.id);
     });
 
     imap.connect();
@@ -213,6 +259,7 @@ export function stopIMAPSync(accountId: string) {
     imap.end();
     activeConnections.delete(accountId);
     console.log(`IMAP sync stopped for account ${accountId}`);
+    retryCounts.delete(accountId);
   }
 }
 
