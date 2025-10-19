@@ -43,24 +43,22 @@ export async function initializeElasticsearch() {
     if (!indexExists) {
       await esClient.indices.create({
         index: INDEX_NAME,
-        body: {
-          mappings: {
-            properties: {
-              id: { type: "keyword" },
-              accountId: { type: "keyword" },
-              messageId: { type: "keyword" },
-              from: { type: "text" },
-              to: { type: "text" },
-              subject: { type: "text" },
-              bodyText: { type: "text" },
-              bodyHtml: { type: "text" },
-              folder: { type: "keyword" },
-              category: { type: "keyword" },
-              isRead: { type: "boolean" },
-              hasAttachments: { type: "boolean" },
-              receivedAt: { type: "date" },
-              createdAt: { type: "date" },
-            },
+        mappings: {
+          properties: {
+            id: { type: "keyword" },
+            accountId: { type: "keyword" },
+            messageId: { type: "keyword" },
+            from: { type: "text" },
+            to: { type: "text" },
+            subject: { type: "text" },
+            bodyText: { type: "text" },
+            bodyHtml: { type: "text" },
+            folder: { type: "keyword" },
+            category: { type: "keyword" },
+            isRead: { type: "boolean" },
+            hasAttachments: { type: "boolean" },
+            receivedAt: { type: "date" },
+            createdAt: { type: "date" },
           },
         },
       });
@@ -147,11 +145,9 @@ export async function searchEmails(filters: {
 
     const result = await esClient.search({
       index: INDEX_NAME,
-      body: {
-        query: must.length > 0 ? { bool: { must } } : { match_all: {} },
-        sort: [{ receivedAt: { order: "desc" } }],
-        size: 100,
-      },
+      query: must.length > 0 ? { bool: { must } } : { match_all: {} },
+      sort: [{ receivedAt: { order: "desc" } }],
+      size: 100,
     });
 
     return result.hits.hits.map((hit: any) => hit._source);

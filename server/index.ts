@@ -2,8 +2,8 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeElasticsearch } from "./lib/elasticsearch";
+import { initializeQdrant } from "./lib/rag";
 import { startAllAccounts } from "./lib/imap-sync";
-import { MongoStorage } from "./mongo-storage";
 import { storage as memStorage, type IStorage } from "./storage";
 
 const app = express();
@@ -41,26 +41,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Initialize MongoDB storage first
-  let storage: IStorage;
-  const MONGODB_URI = process.env.MONGODB_URI;
-
-  if (MONGODB_URI) {
-    try {
-      log("Connecting to MongoDB...");
-      const mongoStorage = new MongoStorage(MONGODB_URI);
-      await mongoStorage.connect();
-      storage = mongoStorage;
-      log("MongoDB connected successfully");
-    } catch (error) {
-      log("MongoDB connection failed, falling back to in-memory storage");
-      console.error("MongoDB connection error:", error);
-      storage = memStorage;
-    }
-  } else {
-    log("No MongoDB URI found, using in-memory storage");
-    storage = memStorage;
-  }
+  // Use in-memory storage (as required by assignment - no MongoDB)
+  log("Using in-memory storage");
+  const storage: IStorage = memStorage;
 
   // Make storage available globally
   (global as any).storage = storage;
@@ -77,6 +60,9 @@ app.use((req, res, next) => {
 
   // Initialize Elasticsearch (will handle connection gracefully if not available)
   await initializeElasticsearch();
+  
+  // Initialize Qdrant (will handle connection gracefully if not available)
+  await initializeQdrant();
 
   // Auto-add Gmail account if credentials are provided
   const GMAIL_EMAIL = process.env.GMAIL_EMAIL;

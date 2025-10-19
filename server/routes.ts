@@ -10,9 +10,9 @@ import {
 } from "@shared/schema";
 import { startIMAPSync, stopIMAPSync } from "./lib/imap-sync";
 import { searchEmails, updateEmailInES } from "./lib/elasticsearch";
-import { categorizeEmail } from "./lib/openai";
+import { categorizeEmail, generateEmbedding } from "./lib/gemini";
 import { sendSlackNotification, sendWebhook } from "./lib/webhooks";
-import { generateEmbedding, generateReply } from "./lib/rag";
+import { generateReply, storeInQdrant, deleteFromQdrant } from "./lib/rag";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -221,6 +221,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const embedding = await generateEmbedding(validatedData.content);
       const entry = await getStorage().createKnowledgeEntry(validatedData, embedding);
+      
+      // Store in Qdrant if available
+      await storeInQdrant(entry.id, embedding, entry.content, entry.category);
 
       res.status(201).json(entry);
     } catch (error: any) {
@@ -245,6 +248,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!entry) {
         return res.status(404).json({ error: "Knowledge entry not found" });
       }
+      
+      // Update in Qdrant if available
+      await storeInQdrant(entry.id, embedding, entry.content, entry.category);
 
       res.json(entry);
     } catch (error: any) {
@@ -262,6 +268,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!deleted) {
         return res.status(404).json({ error: "Knowledge entry not found" });
       }
+      
+      // Delete from Qdrant if available
+      await deleteFromQdrant(id);
 
       res.json({ message: "Knowledge entry deleted successfully" });
     } catch (error) {
@@ -296,7 +305,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ 
       status: "ok",
       elasticsearch: process.env.ELASTICSEARCH_URL || "Not configured",
-      openai: process.env.OPENAI_API_KEY ? "Configured" : "Not configured",
+      qdrant: process.env.QDRANT_URL || "Not configured",
+      gemini: process.env.GEMINI_API_KEY ? "Configured" : "Not configured",
       slack: process.env.SLACK_WEBHOOK_URL ? "Configured" : "Not configured",
       webhook: process.env.WEBHOOK_SITE_URL ? "Configured" : "Not configured",
     });

@@ -2,7 +2,7 @@ import Imap from "node-imap";
 import { simpleParser, type AddressObject } from "mailparser";
 import { getStorage } from "../storage";
 import type { EmailAccount, InsertEmail } from "@shared/schema";
-import { categorizeEmail } from "./openai";
+import { categorizeEmail } from "./gemini";
 import { indexEmail } from "./elasticsearch";
 import { sendSlackNotification, sendWebhook } from "./webhooks";
 

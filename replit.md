@@ -19,10 +19,11 @@ A comprehensive MERN-stack email aggregator with real-time IMAP synchronization,
 - See `ELASTICSEARCH_SETUP.md` for Docker configuration
 
 ### ✅ AI-Based Email Categorization (Requirement 3)
-- OpenAI GPT-5 powered categorization
+- Google Gemini 1.5 Flash powered categorization with structured JSON output
 - Five categories: Interested, Meeting Booked, Not Interested, Spam, Out of Office
 - Automatic categorization on email receipt
 - Manual recategorization via UI dropdown
+- Confidence scoring for categorization quality
 
 ### ✅ Slack & Webhook Integration (Requirement 4)
 - Slack notifications for every "Interested" email with rich formatting
@@ -41,10 +42,11 @@ A comprehensive MERN-stack email aggregator with real-time IMAP synchronization,
 - Fully responsive mobile design
 
 ### ✅ AI-Powered Suggested Replies with RAG (Requirement 6)
-- Vector-based knowledge base using OpenAI embeddings
+- Vector-based knowledge base using Gemini text-embedding-004 model
 - RAG (Retrieval-Augmented Generation) for context-aware reply suggestions
+- Optional Qdrant vector database integration (fallback to in-memory cosine similarity)
 - Knowledge base CRUD operations via dedicated management page
-- Cosine similarity search to find relevant knowledge entries
+- Automatic embedding generation for knowledge entries
 - One-click "Suggest Reply" button in email detail view
 - Displays AI-generated replies with confidence scores
 - Shows which knowledge base entries were used for context
@@ -62,10 +64,11 @@ A comprehensive MERN-stack email aggregator with real-time IMAP synchronization,
 ### Backend
 - **Express.js** with TypeScript
 - **node-imap** for persistent IMAP connections with IDLE mode
-- **Elasticsearch** client for advanced search
-- **OpenAI GPT-5** API for AI categorization
+- **Elasticsearch** client for advanced search (optional with in-memory fallback)
+- **Qdrant** vector database for RAG (optional with in-memory fallback)
+- **Google Gemini 1.5 Flash** API for AI categorization and embeddings
 - **Axios** for webhook integrations
-- In-memory storage with full CRUD operations
+- In-memory storage (MemStorage)
 
 ### Data Model
 - **EmailAccount**: IMAP credentials and connection info
@@ -81,10 +84,11 @@ A comprehensive MERN-stack email aggregator with real-time IMAP synchronization,
 
 ### Required Environment Variables
 ```bash
-OPENAI_API_KEY=sk-...                    # OpenAI API key for AI categorization
+GEMINI_API_KEY=...                             # Google Gemini API key for AI categorization
 SLACK_WEBHOOK_URL=https://hooks.slack.com/...  # Slack incoming webhook
 WEBHOOK_SITE_URL=https://webhook.site/...      # External webhook for automation
 ELASTICSEARCH_URL=http://localhost:9200        # Optional: Elasticsearch URL
+QDRANT_URL=http://localhost:6333               # Optional: Qdrant vector database URL
 ```
 
 ### Running the Application
@@ -177,10 +181,11 @@ The application follows a professional email client design inspired by Linear an
 - Gracefully handles connection errors and timeouts
 
 ### AI Categorization
-- GPT-5 model with structured JSON output
+- Gemini 1.5 Flash model with structured JSON output and schema validation
 - Context-aware classification based on subject, body, and sender
 - Confidence scoring for categorization quality
 - Immediate notification on "Interested" categorization
+- No API rate limits on free tier (generous quotas)
 
 ### Search Implementation
 - Elasticsearch provides full-text search with fuzzy matching
@@ -197,9 +202,10 @@ The application follows a professional email client design inspired by Linear an
 ## 📝 Development Notes
 
 ### Storage
-- Currently uses in-memory storage (MemStorage)
-- Ready for PostgreSQL migration (schema defined in `shared/schema.ts`)
-- All storage operations are async for easy database integration
+- Uses in-memory storage (MemStorage) as specified in assignment requirements
+- MongoDB support removed (not required by assignment)
+- All storage operations are async
+- Storage interface defined in `server/storage.ts`
 
 ### Security Considerations
 - IMAP passwords stored in memory (encrypt for production)

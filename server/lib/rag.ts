@@ -1,29 +1,112 @@
-import OpenAI from "openai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { QdrantClient } from "@qdrant/js-client-rest";
 import type { KnowledgeBase, Email } from "@shared/schema";
+import { generateEmbedding } from "./gemini";
 
-let openai: OpenAI | null = null;
-
-function getOpenAIClient(): OpenAI {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable.");
-  }
-  if (!openai) {
-    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  }
-  return openai;
+// Initialize Qdrant client if URL is provided and valid
+function isValidQdrantUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  return url.startsWith('http://') || url.startsWith('https://');
 }
 
-export async function generateEmbedding(text: string): Promise<number[]> {
+const QDRANT_ENABLED = isValidQdrantUrl(process.env.QDRANT_URL);
+const COLLECTION_NAME = "knowledge_base";
+
+let qdrantClient: QdrantClient | null = null;
+
+function getQdrantClient(): QdrantClient | null {
+  if (!QDRANT_ENABLED || !process.env.QDRANT_URL) return null;
+  
+  if (!qdrantClient) {
+    try {
+      qdrantClient = new QdrantClient({ url: process.env.QDRANT_URL });
+    } catch (error) {
+      console.error("Failed to initialize Qdrant client:", error);
+      return null;
+    }
+  }
+  return qdrantClient;
+}
+
+// Initialize Qdrant collection if available
+export async function initializeQdrant() {
+  const client = getQdrantClient();
+  if (!client) {
+    console.log("Qdrant is not configured. Using in-memory vector search fallback.");
+    return;
+  }
+
   try {
-    const client = getOpenAIClient();
-    const response = await client.embeddings.create({
-      model: "text-embedding-3-small",
-      input: text,
-    });
-    return response.data[0].embedding;
+    const collections = await client.getCollections();
+    const exists = collections.collections.some(c => c.name === COLLECTION_NAME);
+    
+    if (!exists) {
+      await client.createCollection(COLLECTION_NAME, {
+        vectors: {
+          size: 768, // Gemini text-embedding-004 dimension
+          distance: "Cosine"
+        }
+      });
+      console.log(`Qdrant collection "${COLLECTION_NAME}" created successfully`);
+    } else {
+      console.log(`Qdrant collection "${COLLECTION_NAME}" already exists`);
+    }
   } catch (error) {
-    console.error("Error generating embedding:", error);
-    throw new Error("Failed to generate embedding");
+    console.log("Qdrant connection failed. Using in-memory vector search fallback.");
+  }
+}
+
+// Store knowledge entry in Qdrant
+export async function storeInQdrant(id: string, embedding: number[], content: string, category: string) {
+  const client = getQdrantClient();
+  if (!client) return;
+
+  try {
+    await client.upsert(COLLECTION_NAME, {
+      wait: true,
+      points: [
+        {
+          id: id,
+          vector: embedding,
+          payload: { content, category }
+        }
+      ]
+    });
+  } catch (error) {
+    console.error("Error storing in Qdrant:", error);
+  }
+}
+
+// Search Qdrant for relevant knowledge
+export async function searchQdrant(queryEmbedding: number[], topK: number = 3) {
+  const client = getQdrantClient();
+  if (!client) return [];
+
+  try {
+    const result = await client.search(COLLECTION_NAME, {
+      vector: queryEmbedding,
+      limit: topK,
+      with_payload: true
+    });
+    return result;
+  } catch (error) {
+    console.error("Error searching Qdrant:", error);
+    return [];
+  }
+}
+
+// Delete from Qdrant
+export async function deleteFromQdrant(id: string) {
+  const client = getQdrantClient();
+  if (!client) return;
+
+  try {
+    await client.delete(COLLECTION_NAME, {
+      wait: true,
+      points: [id]
+    });
+  } catch (error) {
+    console.error("Error deleting from Qdrant:", error);
   }
 }
 
@@ -56,6 +139,24 @@ export async function findRelevantKnowledge(
 
   const queryEmbedding = await generateEmbedding(query);
   
+  // Try Qdrant first
+  if (QDRANT_ENABLED) {
+    try {
+      const qdrantResults = await searchQdrant(queryEmbedding, topK);
+      if (qdrantResults.length > 0) {
+        // Map Qdrant results back to KnowledgeBase entries
+        return qdrantResults
+          .map(result => {
+            return knowledgeEntries.find(entry => entry.id === String(result.id));
+          })
+          .filter((entry): entry is KnowledgeBase => entry !== undefined);
+      }
+    } catch (error) {
+      console.log("Qdrant search failed, falling back to in-memory search");
+    }
+  }
+  
+  // Fallback to in-memory cosine similarity
   const scoredEntries = knowledgeEntries
     .filter(entry => entry.embedding)
     .map(entry => {
@@ -75,12 +176,31 @@ export interface SuggestedReply {
   relevantKnowledge: string[];
 }
 
+const replySuggestionSchema = {
+  type: "OBJECT" as const,
+  properties: {
+    reply: {
+      type: "STRING" as const,
+      description: "The suggested email reply text"
+    },
+    confidence: {
+      type: "NUMBER" as const,
+      description: "Confidence score from 0.0 to 1.0"
+    }
+  },
+  required: ["reply", "confidence"]
+};
+
 export async function generateReply(
   email: Email,
   knowledgeEntries: KnowledgeBase[]
 ): Promise<SuggestedReply> {
   try {
-    const client = getOpenAIClient();
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("Gemini API key is not configured");
+    }
+
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
     const emailContext = `
 Subject: ${email.subject}
@@ -94,7 +214,16 @@ Body: ${email.bodyText?.substring(0, 1000) || "No body"}
       ? relevantKnowledge.map(k => k.content).join("\n\n")
       : "No specific knowledge base available.";
 
-    const prompt = `You are an AI email assistant. Based on the following knowledge base and the received email, generate a professional and contextually appropriate reply.
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: replySuggestionSchema,
+      },
+      systemInstruction: `You are a professional email assistant that generates contextually appropriate replies based on knowledge base information. Always be polite, professional, and use the knowledge base information when relevant.`
+    });
+
+    const prompt = `Based on the following knowledge base and the received email, generate a professional and contextually appropriate reply.
 
 KNOWLEDGE BASE:
 ${knowledgeContext}
@@ -108,32 +237,20 @@ Generate a professional email reply that:
 3. Is polite and professional
 4. Stays on topic
 
-Respond with JSON in this format: { "reply": "your suggested reply text", "confidence": 0.0-1.0 }`;
+Provide the reply text and confidence score.`;
 
-    const response = await client.chat.completions.create({
-      model: "gpt-5",
-      messages: [
-        {
-          role: "system",
-          content: "You are a professional email assistant that generates contextually appropriate replies based on knowledge base information.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      response_format: { type: "json_object" },
-    });
-
-    const result = JSON.parse(response.choices[0].message.content || "{}");
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const text = response.text();
+    const parsed = JSON.parse(text);
     
     return {
-      reply: result.reply || "Thank you for your email. I will get back to you shortly.",
-      confidence: Math.max(0, Math.min(1, result.confidence || 0.7)),
+      reply: parsed.reply || "Thank you for your email. I will get back to you shortly.",
+      confidence: Math.max(0, Math.min(1, parsed.confidence || 0.7)),
       relevantKnowledge: relevantKnowledge.map(k => k.content),
     };
   } catch (error) {
-    console.error("Error generating reply:", error);
+    console.error("Error generating reply with Gemini:", error);
     throw new Error("Failed to generate reply suggestion");
   }
 }
