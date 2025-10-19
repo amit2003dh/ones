@@ -1,10 +1,19 @@
 import Imap from "node-imap";
-import { simpleParser } from "mailparser";
+import { simpleParser, type AddressObject } from "mailparser";
 import { getStorage } from "../storage";
 import type { EmailAccount, InsertEmail } from "@shared/schema";
 import { categorizeEmail } from "./openai";
 import { indexEmail } from "./elasticsearch";
 import { sendSlackNotification, sendWebhook } from "./webhooks";
+
+// Helper to extract email address text from AddressObject
+function getAddressText(address: AddressObject | AddressObject[] | undefined): string {
+  if (!address) return "";
+  if (Array.isArray(address)) {
+    return address.map(a => a.text).join(", ");
+  }
+  return address.text;
+}
 
 // Active IMAP connections
 const activeConnections = new Map<string, Imap>();
@@ -140,15 +149,15 @@ async function fetchEmails(imap: Imap, account: EmailAccount, searchCriteria: an
             const categorization = await categorizeEmail(
               parsed.subject || "",
               bodyText,
-              parsed.from?.text || ""
+              getAddressText(parsed.from)
             );
 
             // Create email object
             const emailData: InsertEmail = {
               accountId: account.id,
               messageId,
-              from: parsed.from?.text || "",
-              to: parsed.to?.text || "",
+              from: getAddressText(parsed.from),
+              to: getAddressText(parsed.to),
               subject: parsed.subject || "(No Subject)",
               bodyText,
               bodyHtml: bodyHtml ? bodyHtml.toString() : null,

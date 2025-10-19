@@ -4,7 +4,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { initializeElasticsearch } from "./lib/elasticsearch";
 import { startAllAccounts } from "./lib/imap-sync";
 import { MongoStorage } from "./mongo-storage";
-import { storage as memStorage } from "./storage";
+import { storage as memStorage, type IStorage } from "./storage";
 
 const app = express();
 app.use(express.json());
@@ -42,7 +42,7 @@ app.use((req, res, next) => {
 
 (async () => {
   // Initialize MongoDB storage first
-  let storage: typeof memStorage;
+  let storage: IStorage;
   const MONGODB_URI = process.env.MONGODB_URI;
 
   if (MONGODB_URI) {
