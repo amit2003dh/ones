@@ -182,6 +182,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk update email categories
+  app.patch("/api/emails/bulk/category", async (req, res) => {
+    try {
+      const { emailIds, category } = req.body;
+
+      if (!emailIds || !Array.isArray(emailIds) || emailIds.length === 0) {
+        return res.status(400).json({ error: "Email IDs array is required" });
+      }
+
+      const { category: validatedCategory } = updateEmailCategorySchema.parse({ category });
+
+      const updatedEmails = await Promise.all(
+        emailIds.map(async (id) => {
+          const email = await getStorage().updateEmailCategory(id, validatedCategory);
+          if (email) {
+            await updateEmailInES(id, { category: validatedCategory });
+            
+            if (validatedCategory === "Interested") {
+              await Promise.all([
+                sendSlackNotification(email),
+                sendWebhook(email),
+              ]);
+            }
+          }
+          return email;
+        })
+      );
+
+      const successCount = updatedEmails.filter(e => e !== undefined).length;
+
+      res.json({ 
+        message: `Successfully categorized ${successCount} email(s)`,
+        updated: successCount
+      });
+    } catch (error: any) {
+      console.error("Error bulk updating email categories:", error);
+      res.status(400).json({ error: error.message || "Failed to update categories" });
+    }
+  });
+
   // Mark email as read
   app.patch("/api/emails/:id/read", async (req, res) => {
     try {
@@ -199,6 +239,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error marking email as read:", error);
       res.status(500).json({ error: "Failed to mark email as read" });
+    }
+  });
+
+  // Delete email
+  app.delete("/api/emails/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const deleted = await getStorage().deleteEmail(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "Email not found" });
+      }
+
+      res.json({ message: "Email deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting email:", error);
+      res.status(500).json({ error: "Failed to delete email" });
+    }
+  });
+
+  // Forward email
+  app.post("/api/emails/:id/forward", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { to, message } = req.body;
+
+      if (!to || typeof to !== "string") {
+        return res.status(400).json({ error: "Recipient email is required" });
+      }
+
+      const email = await getStorage().getEmail(id);
+      if (!email) {
+        return res.status(404).json({ error: "Email not found" });
+      }
+
+      res.json({ 
+        message: "Email forwarding is configured. In production, this would send via SMTP.",
+        forwardedTo: to,
+        originalSubject: email.subject
+      });
+    } catch (error) {
+      console.error("Error forwarding email:", error);
+      res.status(500).json({ error: "Failed to forward email" });
+    }
+  });
+
+  // Auto-reply to email
+  app.post("/api/emails/:id/auto-reply", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { replyText } = req.body;
+
+      const email = await getStorage().getEmail(id);
+      if (!email) {
+        return res.status(404).json({ error: "Email not found" });
+      }
+
+      const account = await getStorage().getAccount(email.accountId);
+      if (!account) {
+        return res.status(404).json({ error: "Account not found" });
+      }
+
+      res.json({ 
+        message: "Auto-reply sent successfully (simulated)",
+        sentTo: email.from,
+        from: account.email,
+        subject: `Re: ${email.subject}`
+      });
+    } catch (error) {
+      console.error("Error sending auto-reply:", error);
+      res.status(500).json({ error: "Failed to send auto-reply" });
     }
   });
 

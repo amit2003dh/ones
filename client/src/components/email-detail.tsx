@@ -12,7 +12,8 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
-  Copy
+  Copy,
+  Send
 } from "lucide-react";
 import type { EmailWithAccount, EmailCategory, EMAIL_CATEGORIES } from "@shared/schema";
 import { format } from "date-fns";
@@ -25,6 +26,27 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -52,6 +74,12 @@ export function EmailDetail({ email, onBack }: EmailDetailProps) {
     confidence: number;
     relevantKnowledge: string[];
   } | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showForwardDialog, setShowForwardDialog] = useState(false);
+  const [showAutoReplyDialog, setShowAutoReplyDialog] = useState(false);
+  const [forwardTo, setForwardTo] = useState("");
+  const [forwardMessage, setForwardMessage] = useState("");
+  const [autoReplyText, setAutoReplyText] = useState("");
   const { toast } = useToast();
 
   const categorizeMutation = useMutation({
@@ -95,6 +123,80 @@ export function EmailDetail({ email, onBack }: EmailDetailProps) {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("DELETE", `/api/emails/${email?.id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/emails"] });
+      toast({
+        title: "Email deleted",
+        description: "The email has been deleted successfully",
+      });
+      setShowDeleteDialog(false);
+      onBack();
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete email",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const forwardMutation = useMutation({
+    mutationFn: async () => {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(forwardTo)) {
+        throw new Error("Please enter a valid email address");
+      }
+      return apiRequest("POST", `/api/emails/${email?.id}/forward`, {
+        to: forwardTo,
+        message: forwardMessage,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Email forwarded",
+        description: `Email forwarded to ${forwardTo}`,
+      });
+      setShowForwardDialog(false);
+      setForwardTo("");
+      setForwardMessage("");
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to forward email",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const autoReplyMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", `/api/emails/${email?.id}/auto-reply`, {
+        replyText: autoReplyText,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Auto-reply sent",
+        description: "Your automatic reply has been sent",
+      });
+      setShowAutoReplyDialog(false);
+      setAutoReplyText("");
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to send auto-reply",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCopyReply = () => {
     if (suggestedReply) {
       navigator.clipboard.writeText(suggestedReply.reply);
@@ -102,6 +204,13 @@ export function EmailDetail({ email, onBack }: EmailDetailProps) {
         title: "Copied",
         description: "Reply copied to clipboard",
       });
+    }
+  };
+
+  const handleUseAsSuggestedReply = () => {
+    if (suggestedReply) {
+      setAutoReplyText(suggestedReply.reply);
+      setShowAutoReplyDialog(true);
     }
   };
 
@@ -149,16 +258,31 @@ export function EmailDetail({ email, onBack }: EmailDetailProps) {
               Suggest Reply
             </Button>
             <Separator orientation="vertical" className="h-6" />
-            <Button variant="ghost" size="icon" data-testid="button-reply">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setShowAutoReplyDialog(true)}
+              data-testid="button-reply"
+            >
               <Reply className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" data-testid="button-forward">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setShowForwardDialog(true)}
+              data-testid="button-forward"
+            >
               <Forward className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="icon" data-testid="button-archive">
               <Archive className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" data-testid="button-delete">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setShowDeleteDialog(true)}
+              data-testid="button-delete"
+            >
               <Trash2 className="h-4 w-4" />
             </Button>
             <DropdownMenu>
@@ -297,15 +421,26 @@ export function EmailDetail({ email, onBack }: EmailDetailProps) {
                         Confidence: {Math.round(suggestedReply.confidence * 100)}%
                       </span>
                     </div>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={handleCopyReply}
-                      data-testid="button-copy-reply"
-                    >
-                      <Copy className="h-4 w-4 mr-2" />
-                      Copy
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={handleCopyReply}
+                        data-testid="button-copy-reply"
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
+                        Copy
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={handleUseAsSuggestedReply}
+                        data-testid="button-use-suggested-reply"
+                      >
+                        <Send className="h-4 w-4 mr-2" />
+                        Use as Reply
+                      </Button>
+                    </div>
                   </div>
                   <div className="bg-background p-4 rounded-md border">
                     <p className="whitespace-pre-wrap text-sm" data-testid="text-suggested-reply">
@@ -328,6 +463,123 @@ export function EmailDetail({ email, onBack }: EmailDetailProps) {
           </div>
         </div>
       </ScrollArea>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent data-testid="dialog-delete-email">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Email</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this email? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Forward Email Dialog */}
+      <Dialog open={showForwardDialog} onOpenChange={setShowForwardDialog}>
+        <DialogContent data-testid="dialog-forward-email">
+          <DialogHeader>
+            <DialogTitle>Forward Email</DialogTitle>
+            <DialogDescription>
+              Forward "{email?.subject}" to another recipient
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="forward-to">To</Label>
+              <Input
+                id="forward-to"
+                type="email"
+                placeholder="recipient@example.com"
+                value={forwardTo}
+                onChange={(e) => setForwardTo(e.target.value)}
+                data-testid="input-forward-to"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="forward-message">Additional Message (Optional)</Label>
+              <Textarea
+                id="forward-message"
+                placeholder="Add a message to include with the forwarded email..."
+                value={forwardMessage}
+                onChange={(e) => setForwardMessage(e.target.value)}
+                rows={4}
+                data-testid="textarea-forward-message"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setShowForwardDialog(false)}
+              data-testid="button-cancel-forward"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => forwardMutation.mutate()}
+              disabled={!forwardTo || forwardMutation.isPending}
+              data-testid="button-send-forward"
+            >
+              <Send className="h-4 w-4 mr-2" />
+              {forwardMutation.isPending ? "Forwarding..." : "Forward"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Auto-Reply Dialog */}
+      <Dialog open={showAutoReplyDialog} onOpenChange={setShowAutoReplyDialog}>
+        <DialogContent data-testid="dialog-auto-reply">
+          <DialogHeader>
+            <DialogTitle>Auto-Reply</DialogTitle>
+            <DialogDescription>
+              Send an automatic reply to {email?.from}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="auto-reply-text">Reply Message</Label>
+              <Textarea
+                id="auto-reply-text"
+                placeholder="Type your reply message..."
+                value={autoReplyText}
+                onChange={(e) => setAutoReplyText(e.target.value)}
+                rows={6}
+                data-testid="textarea-auto-reply"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setShowAutoReplyDialog(false)}
+              data-testid="button-cancel-auto-reply"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => autoReplyMutation.mutate()}
+              disabled={!autoReplyText || autoReplyMutation.isPending}
+              data-testid="button-send-auto-reply"
+            >
+              <Send className="h-4 w-4 mr-2" />
+              {autoReplyMutation.isPending ? "Sending..." : "Send Reply"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

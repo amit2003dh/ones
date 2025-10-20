@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { EmailCategoryBadge } from "./email-category-badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Paperclip } from "lucide-react";
 import type { EmailWithAccount, EmailCategory } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
@@ -11,9 +12,19 @@ interface EmailListProps {
   selectedEmailId?: string;
   onEmailSelect: (emailId: string) => void;
   isLoading?: boolean;
+  selectedEmailIds?: string[];
+  onToggleEmailSelection?: (emailId: string) => void;
 }
 
-export function EmailList({ emails, selectedEmailId, onEmailSelect, isLoading }: EmailListProps) {
+export function EmailList({ 
+  emails, 
+  selectedEmailId, 
+  onEmailSelect, 
+  isLoading,
+  selectedEmailIds = [],
+  onToggleEmailSelection
+}: EmailListProps) {
+  const isMultiSelectMode = selectedEmailIds.length > 0;
   if (isLoading) {
     return (
       <div className="flex flex-col h-full border-r">
@@ -55,22 +66,45 @@ export function EmailList({ emails, selectedEmailId, onEmailSelect, isLoading }:
         <div className="p-2 space-y-1">
           {emails.map((email) => {
             const isSelected = selectedEmailId === email.id;
+            const isChecked = selectedEmailIds.includes(email.id);
             const categoryColor = email.category 
               ? getCategoryBorderColor(email.category as EmailCategory)
               : "transparent";
+            
+            const handleClick = (e: React.MouseEvent) => {
+              if (isMultiSelectMode && onToggleEmailSelection) {
+                e.stopPropagation();
+                onToggleEmailSelection(email.id);
+              } else {
+                onEmailSelect(email.id);
+              }
+            };
+
+            const handleCheckboxClick = (e: React.MouseEvent) => {
+              e.stopPropagation();
+            };
             
             return (
               <Card
                 key={email.id}
                 className={`p-4 cursor-pointer hover-elevate active-elevate-2 transition-colors border-l-4 ${
                   isSelected ? "bg-accent" : ""
-                }`}
+                } ${isChecked ? "ring-2 ring-primary" : ""}`}
                 style={{ borderLeftColor: categoryColor }}
-                onClick={() => onEmailSelect(email.id)}
+                onClick={handleClick}
                 data-testid={`email-item-${email.id}`}
               >
                 <div className="space-y-2">
                   <div className="flex items-start justify-between gap-2">
+                    {onToggleEmailSelection && (
+                      <div className="flex items-center pt-0.5" onClick={handleCheckboxClick}>
+                        <Checkbox
+                          checked={isChecked}
+                          onCheckedChange={() => onToggleEmailSelection(email.id)}
+                          data-testid={`checkbox-email-${email.id}`}
+                        />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className={`text-sm truncate ${!email.isRead ? "font-semibold" : "font-medium"}`}>

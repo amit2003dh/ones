@@ -1,14 +1,16 @@
-import { Search, X } from "lucide-react";
+import { Search, X, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 interface SearchBarProps {
   onSearch: (query: string) => void;
   placeholder?: string;
+  isLoading?: boolean;
 }
 
-export function SearchBar({ onSearch, placeholder = "Search emails..." }: SearchBarProps) {
+export function SearchBar({ onSearch, placeholder = "Search emails...", isLoading = false }: SearchBarProps) {
   const [query, setQuery] = useState("");
 
   const handleSearch = (value: string) => {
@@ -21,9 +23,15 @@ export function SearchBar({ onSearch, placeholder = "Search emails..." }: Search
     onSearch("");
   };
 
+  const showClearButton = query && !isLoading;
+  const showLoadingIcon = query && isLoading;
+
   return (
     <div className="relative">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <Search className={cn(
+        "absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors",
+        isLoading && query ? "text-primary" : "text-muted-foreground"
+      )} />
       <Input
         type="search"
         placeholder={placeholder}
@@ -32,7 +40,12 @@ export function SearchBar({ onSearch, placeholder = "Search emails..." }: Search
         className="pl-9 pr-9"
         data-testid="input-search"
       />
-      {query && (
+      {showLoadingIcon && (
+        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" data-testid="icon-search-loading" />
+        </div>
+      )}
+      {showClearButton && (
         <Button
           variant="ghost"
           size="icon"

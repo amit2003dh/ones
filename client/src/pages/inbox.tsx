@@ -7,6 +7,9 @@ import { AddAccountDialog } from "@/components/add-account-dialog";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { SearchBar } from "@/components/search-bar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { BulkActionsToolbar } from "@/components/bulk-actions-toolbar";
+import { Button } from "@/components/ui/button";
+import { CheckSquare } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { EmailWithAccount } from "@shared/schema";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -19,6 +22,7 @@ export default function Inbox() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [selectedEmailIds, setSelectedEmailIds] = useState<string[]>([]);
   
   const isMobile = useMediaQuery("(max-width: 768px)");
   const [showEmailDetail, setShowEmailDetail] = useState(false);
@@ -59,6 +63,18 @@ export default function Inbox() {
     setShowEmailDetail(false);
   };
 
+  const handleToggleEmailSelection = (emailId: string) => {
+    setSelectedEmailIds(prev => 
+      prev.includes(emailId) 
+        ? prev.filter(id => id !== emailId)
+        : [...prev, emailId]
+    );
+  };
+
+  const handleClearSelection = () => {
+    setSelectedEmailIds([]);
+  };
+
   const sidebarStyle = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -84,39 +100,58 @@ export default function Inbox() {
             <div className="flex items-center gap-4 flex-1">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
               <div className="flex-1 max-w-md">
-                <SearchBar onSearch={setSearchQuery} />
+                <SearchBar onSearch={setSearchQuery} isLoading={isLoading} />
               </div>
             </div>
-            <ThemeToggle />
+            <div className="flex items-center gap-2">
+              <Button
+                variant={selectedEmailIds.length > 0 ? "default" : "ghost"}
+                size="icon"
+                onClick={() => selectedEmailIds.length > 0 ? handleClearSelection() : null}
+                title="Multi-select mode"
+                data-testid="button-multi-select"
+              >
+                <CheckSquare className="h-4 w-4" />
+              </Button>
+              <ThemeToggle />
+            </div>
           </header>
 
           {/* Main Content */}
           <main className="flex-1 overflow-hidden">
-            <div className="flex h-full">
-              {/* Email List - Hidden on mobile when email detail is shown */}
-              <div 
-                className={`w-full md:w-96 ${
-                  isMobile && showEmailDetail ? "hidden" : "block"
-                }`}
-              >
-                <EmailList
-                  emails={emails || []}
-                  selectedEmailId={selectedEmailId}
-                  onEmailSelect={handleEmailSelect}
-                  isLoading={isLoading}
-                />
-              </div>
+            <div className="flex h-full flex-col">
+              <BulkActionsToolbar 
+                selectedEmailIds={selectedEmailIds}
+                onClearSelection={handleClearSelection}
+              />
+              <div className="flex flex-1 overflow-hidden">
+                {/* Email List - Hidden on mobile when email detail is shown */}
+                <div 
+                  className={`w-full md:w-96 ${
+                    isMobile && showEmailDetail ? "hidden" : "block"
+                  }`}
+                >
+                  <EmailList
+                    emails={emails || []}
+                    selectedEmailId={selectedEmailId}
+                    onEmailSelect={handleEmailSelect}
+                    isLoading={isLoading}
+                    selectedEmailIds={selectedEmailIds}
+                    onToggleEmailSelection={handleToggleEmailSelection}
+                  />
+                </div>
 
-              {/* Email Detail - Full screen on mobile, right pane on desktop */}
-              <div 
-                className={`flex-1 ${
-                  isMobile && !showEmailDetail ? "hidden" : "block"
-                }`}
-              >
-                <EmailDetail
-                  email={selectedEmail || null}
-                  onBack={handleBackToList}
-                />
+                {/* Email Detail - Full screen on mobile, right pane on desktop */}
+                <div 
+                  className={`flex-1 ${
+                    isMobile && !showEmailDetail ? "hidden" : "block"
+                  }`}
+                >
+                  <EmailDetail
+                    email={selectedEmail || null}
+                    onBack={handleBackToList}
+                  />
+                </div>
               </div>
             </div>
           </main>

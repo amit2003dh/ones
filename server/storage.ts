@@ -26,6 +26,7 @@ export interface IStorage {
   createEmail(email: InsertEmail): Promise<Email>;
   updateEmailCategory(id: string, category: string): Promise<Email | undefined>;
   markEmailAsRead(id: string): Promise<Email | undefined>;
+  deleteEmail(id: string): Promise<boolean>;
   deleteEmailsByAccount(accountId: string): Promise<void>;
 
   // Knowledge Base
@@ -166,6 +167,10 @@ export class MemStorage implements IStorage {
       return email;
     }
     return undefined;
+  }
+
+  async deleteEmail(id: string): Promise<boolean> {
+    return this.emails.delete(id);
   }
 
   async deleteEmailsByAccount(accountId: string): Promise<void> {
