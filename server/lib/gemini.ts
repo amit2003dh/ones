@@ -43,7 +43,7 @@ export async function categorizeEmail(
     const client = getGeminiClient();
     
     const model = client.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash-exp",
       generationConfig: {
         responseMimeType: "application/json",
         // responseSchema typing from the SDK is strict; cast to any to satisfy TS here
