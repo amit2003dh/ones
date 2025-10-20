@@ -1,12 +1,14 @@
 import axios from "axios";
 import type { Email } from "@shared/schema";
+import ENV from "./env";
 
 // Send Slack notification
 export async function sendSlackNotification(email: Email) {
-  const slackWebhookUrl = process.env.SLACK_WEBHOOK_URL;
-  
-  if (!slackWebhookUrl) {
-    console.log("Slack webhook URL not configured");
+  const slackWebhookUrl = ENV.SLACK_WEBHOOK_URL;
+  const slackApiToken = ENV.SLACK_API_TOKEN;
+
+  if (!slackWebhookUrl && !slackApiToken) {
+    console.log("Slack is not configured (webhook or API token missing)");
     return;
   }
 
@@ -54,7 +56,21 @@ export async function sendSlackNotification(email: Email) {
       ],
     };
 
-    await axios.post(slackWebhookUrl, message);
+    if (slackWebhookUrl) {
+      await axios.post(slackWebhookUrl, message);
+    } else {
+      // Use Slack Web API as fallback
+      await axios.post("https://slack.com/api/chat.postMessage", {
+        channel: "#general",
+        text: message.text,
+        blocks: message.blocks,
+      }, {
+        headers: {
+          Authorization: `Bearer ${slackApiToken}`,
+          "Content-Type": "application/json",
+        }
+      });
+    }
     console.log(`Slack notification sent for email: ${email.subject}`);
   } catch (error) {
     console.error("Error sending Slack notification:", error);
@@ -63,7 +79,7 @@ export async function sendSlackNotification(email: Email) {
 
 // Send external webhook
 export async function sendWebhook(email: Email) {
-  const webhookUrl = process.env.WEBHOOK_SITE_URL;
+  const webhookUrl = ENV.WEBHOOK_SITE_URL;
   
   if (!webhookUrl) {
     console.log("External webhook URL not configured");

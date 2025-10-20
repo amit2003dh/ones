@@ -1,11 +1,11 @@
 import { Client } from "@elastic/elasticsearch";
+import ENV from "./env";
 
 // Elasticsearch client configuration
-const ELASTICSEARCH_ENABLED = process.env.ELASTICSEARCH_URL ? true : false;
-
+const ELASTICSEARCH_ENABLED = ENV.ELASTICSEARCH_URL ? true : false;
 export const esClient = ELASTICSEARCH_ENABLED
   ? new Client({
-      node: process.env.ELASTICSEARCH_URL,
+      node: ENV.ELASTICSEARCH_URL,
     })
   : null;
 

@@ -1,7 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { EmailCategoryBadge } from "./email-category-badge";
 import { Paperclip } from "lucide-react";
-import type { EmailWithAccount } from "@shared/schema";
+import type { EmailWithAccount, EmailCategory } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -56,7 +56,7 @@ export function EmailList({ emails, selectedEmailId, onEmailSelect, isLoading }:
           {emails.map((email) => {
             const isSelected = selectedEmailId === email.id;
             const categoryColor = email.category 
-              ? getCategoryBorderColor(email.category)
+              ? getCategoryBorderColor(email.category as EmailCategory)
               : "transparent";
             
             return (
@@ -106,7 +106,7 @@ export function EmailList({ emails, selectedEmailId, onEmailSelect, isLoading }:
                   
                   {email.category && (
                     <div className="flex items-center gap-2 pt-1">
-                      <EmailCategoryBadge category={email.category} size="sm" />
+                      <EmailCategoryBadge category={email.category as EmailCategory | null} size="sm" />
                     </div>
                   )}
                 </div>
@@ -119,7 +119,8 @@ export function EmailList({ emails, selectedEmailId, onEmailSelect, isLoading }:
   );
 }
 
-function getCategoryBorderColor(category: string): string {
+function getCategoryBorderColor(category?: string | null): string {
+  if (!category) return "transparent";
   const colors: Record<string, string> = {
     "Interested": "hsl(142 76% 36%)",
     "Meeting Booked": "hsl(221 83% 53%)",

@@ -10,6 +10,7 @@ import {
 } from "@shared/schema";
 import { startIMAPSync, stopIMAPSync } from "./lib/imap-sync";
 import { searchEmails, updateEmailInES } from "./lib/elasticsearch";
+import ENV from "./lib/env";
 import { categorizeEmail, generateEmbedding } from "./lib/gemini";
 import { sendSlackNotification, sendWebhook } from "./lib/webhooks";
 import { generateReply, storeInQdrant, deleteFromQdrant } from "./lib/rag";
@@ -302,13 +303,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ========== Health Check ==========
   
   app.get("/api/health", (req, res) => {
-    res.json({ 
+    // Use centralized ENV helper for consistent reporting
+    res.json({
       status: "ok",
-      elasticsearch: process.env.ELASTICSEARCH_URL || "Not configured",
-      qdrant: process.env.QDRANT_URL || "Not configured",
-      gemini: process.env.GEMINI_API_KEY ? "Configured" : "Not configured",
-      slack: process.env.SLACK_WEBHOOK_URL ? "Configured" : "Not configured",
-      webhook: process.env.WEBHOOK_SITE_URL ? "Configured" : "Not configured",
+      elasticsearch: ENV.ELASTICSEARCH_URL || "Not configured",
+      qdrant: ENV.QDRANT_URL || "Not configured",
+      gemini: ENV.GEMINI_API_KEY ? "Configured" : "Not configured",
+      slack: ENV.SLACK_WEBHOOK_URL ? "Configured" : "Not configured",
+      webhook: ENV.WEBHOOK_SITE_URL ? "Configured" : "Not configured",
     });
   });
 

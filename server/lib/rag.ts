@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import ENV from "./env";
 import { QdrantClient } from "@qdrant/js-client-rest";
 import type { KnowledgeBase, Email } from "@shared/schema";
 import { generateEmbedding } from "./gemini";
@@ -9,17 +10,21 @@ function isValidQdrantUrl(url: string | undefined): boolean {
   return url.startsWith('http://') || url.startsWith('https://');
 }
 
-const QDRANT_ENABLED = isValidQdrantUrl(process.env.QDRANT_URL);
+const QDRANT_ENABLED = isValidQdrantUrl(ENV.QDRANT_URL);
 const COLLECTION_NAME = "knowledge_base";
 
 let qdrantClient: QdrantClient | null = null;
 
 function getQdrantClient(): QdrantClient | null {
-  if (!QDRANT_ENABLED || !process.env.QDRANT_URL) return null;
+  if (!QDRANT_ENABLED || !ENV.QDRANT_URL) return null;
   
   if (!qdrantClient) {
     try {
-      qdrantClient = new QdrantClient({ url: process.env.QDRANT_URL });
+      const opts: any = { url: ENV.QDRANT_URL };
+      if (ENV.QDRANT_API_KEY) {
+        opts.headers = { Authorization: `Bearer ${ENV.QDRANT_API_KEY}` };
+      }
+      qdrantClient = new QdrantClient(opts);
     } catch (error) {
       console.error("Failed to initialize Qdrant client:", error);
       return null;
@@ -177,14 +182,14 @@ export interface SuggestedReply {
 }
 
 const replySuggestionSchema = {
-  type: "OBJECT" as const,
+  type: SchemaType.OBJECT,
   properties: {
     reply: {
-      type: "STRING" as const,
+      type: SchemaType.STRING,
       description: "The suggested email reply text"
     },
     confidence: {
-      type: "NUMBER" as const,
+      type: SchemaType.NUMBER,
       description: "Confidence score from 0.0 to 1.0"
     }
   },
@@ -196,11 +201,11 @@ export async function generateReply(
   knowledgeEntries: KnowledgeBase[]
 ): Promise<SuggestedReply> {
   try {
-    if (!process.env.GEMINI_API_KEY) {
+    if (!ENV.GEMINI_API_KEY) {
       throw new Error("Gemini API key is not configured");
     }
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const genAI = new GoogleGenerativeAI(ENV.GEMINI_API_KEY);
     
     const emailContext = `
 Subject: ${email.subject}
@@ -218,7 +223,7 @@ Body: ${email.bodyText?.substring(0, 1000) || "No body"}
       model: "gemini-1.5-flash",
       generationConfig: {
         responseMimeType: "application/json",
-        responseSchema: replySuggestionSchema,
+        responseSchema: replySuggestionSchema as any,
       },
       systemInstruction: `You are a professional email assistant that generates contextually appropriate replies based on knowledge base information. Always be polite, professional, and use the knowledge base information when relevant.`
     });

@@ -1,13 +1,14 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import ENV from "./env";
 
 let genAI: GoogleGenerativeAI | null = null;
 
 function getGeminiClient(): GoogleGenerativeAI {
-  if (!process.env.GEMINI_API_KEY) {
+  if (!ENV.GEMINI_API_KEY) {
     throw new Error("Gemini API key is not configured. Please set GEMINI_API_KEY environment variable.");
   }
   if (!genAI) {
-    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    genAI = new GoogleGenerativeAI(ENV.GEMINI_API_KEY);
   }
   return genAI;
 }
@@ -18,15 +19,15 @@ export interface EmailCategorizationResult {
 }
 
 const emailCategorySchema = {
-  type: "OBJECT" as const,
+  type: SchemaType.OBJECT,
   properties: {
     category: {
-      type: "STRING" as const,
+      type: SchemaType.STRING,
       description: "The email category based on content analysis",
       enum: ["Interested", "Meeting Booked", "Not Interested", "Spam", "Out of Office"]
     },
     confidence: {
-      type: "NUMBER" as const,
+      type: SchemaType.NUMBER,
       description: "Confidence score from 0.0 to 1.0"
     }
   },
@@ -45,7 +46,8 @@ export async function categorizeEmail(
       model: "gemini-1.5-flash",
       generationConfig: {
         responseMimeType: "application/json",
-        responseSchema: emailCategorySchema,
+        // responseSchema typing from the SDK is strict; cast to any to satisfy TS here
+        responseSchema: emailCategorySchema as any,
       },
       systemInstruction: `You are an expert email classifier. Your task is to analyze the provided email text and categorize it into one of the following labels based on the content and intent:
 

@@ -33,7 +33,10 @@ export async function setupVite(app: Express, server: Server) {
       ...viteLogger,
       error: (msg, options) => {
         viteLogger.error(msg, options);
-        process.exit(1);
+        // Do not exit in development; let the server continue and surface the error
+        if (process.env.NODE_ENV === "production") {
+          process.exit(1);
+        }
       },
     },
     server: serverOptions,

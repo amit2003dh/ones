@@ -1,12 +1,22 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import ENV from "./lib/env";
 import { initializeElasticsearch } from "./lib/elasticsearch";
 import { initializeQdrant } from "./lib/rag";
 import { startAllAccounts } from "./lib/imap-sync";
 import { storage as memStorage, type IStorage } from "./storage";
 
 const app = express();
+
+// Global error handlers to surface unexpected crashes during development
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled rejection:", reason);
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -55,7 +65,8 @@ app.use((req, res, next) => {
     const message = err.message || "Internal Server Error";
 
     res.status(status).json({ message });
-    throw err;
+    // In development we log the error but do not re-throw to keep the server running
+    console.error("Handled error:", err);
   });
 
   // Initialize Elasticsearch (will handle connection gracefully if not available)
@@ -65,8 +76,8 @@ app.use((req, res, next) => {
   await initializeQdrant();
 
   // Auto-add Gmail account if credentials are provided
-  const GMAIL_EMAIL = process.env.GMAIL_EMAIL;
-  const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
+  const GMAIL_EMAIL = ENV.GMAIL_EMAIL;
+  const GMAIL_APP_PASSWORD = ENV.GMAIL_APP_PASSWORD;
   
   if (GMAIL_EMAIL && GMAIL_APP_PASSWORD) {
     log("Checking for Gmail account setup...");
@@ -106,7 +117,7 @@ app.use((req, res, next) => {
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
+  const port = parseInt(ENV.PORT || '5000', 10);
   // On some platforms (Windows) `reusePort` is not supported and
   // will cause an ENOTSUP error. Only enable it when the platform
   // supports it (non-Windows).
@@ -121,8 +132,11 @@ app.use((req, res, next) => {
 
   server.on("error", (err) => {
     log(`server error: ${(err as Error).message}`, "express");
-    // Exit with non-zero code so process managers know startup failed
-    process.exit(1);
+    // In production we want to exit so a process manager can restart the service.
+    // In development log and keep running to aid debugging.
+    if (process.env.NODE_ENV === "production") {
+      process.exit(1);
+    }
   });
 
   server.listen(listenOptions, () => {
