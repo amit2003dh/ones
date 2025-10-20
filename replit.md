@@ -52,6 +52,15 @@ A comprehensive MERN-stack email aggregator with real-time IMAP synchronization,
 - Shows which knowledge base entries were used for context
 - Copy-to-clipboard functionality for suggested replies
 
+### ✅ Advanced Email Management Features
+- **Search UI**: Real-time loading indicator with animated spinner during active searches
+- **Delete Email**: Confirmation dialog with permanent deletion warning and backend API integration
+- **Forward Email**: Dialog with recipient input, optional message, and email format validation
+- **Auto-Reply**: AI-powered reply suggestions with customizable message composition
+- **Bulk Categorization**: Multi-select mode with checkboxes and bulk action toolbar for batch operations
+- All actions use TanStack Query mutations with proper error handling and toast notifications
+- Client-side validation prevents invalid email formats from reaching the backend
+
 ## 🏗️ Architecture
 
 ### Frontend
@@ -161,6 +170,10 @@ The application follows a professional email client design inspired by Linear an
 - `GET /api/emails/:id` - Get single email
 - `PATCH /api/emails/:id/category` - Update category
 - `PATCH /api/emails/:id/read` - Mark as read
+- `DELETE /api/emails/:id` - Delete email permanently
+- `POST /api/emails/:id/forward` - Forward email to recipient
+- `POST /api/emails/:id/auto-reply` - Send auto-reply with AI-generated or custom message
+- `PATCH /api/emails/bulk/category` - Bulk categorize multiple emails
 - `POST /api/emails/suggest-reply` - Generate AI reply suggestion (RAG)
 
 ### Knowledge Base (RAG)
@@ -229,13 +242,14 @@ All backend features can be tested via Postman:
 
 ## 🚀 Next Phase Features
 
-- Email composition and reply functionality
+- Email composition and direct reply functionality
 - Thread grouping and conversation view
-- Bulk actions (mark multiple as read, delete, categorize)
+- Additional bulk actions (mark multiple as read, bulk delete)
 - Analytics dashboard with email categorization statistics
 - PostgreSQL database for production persistence
 - User authentication and multi-user support
 - Advanced vector database (Pinecone, Weaviate, Chroma) for production-scale RAG
+- Email scheduling and snooze functionality
 
 ## 📚 Project Structure
 
@@ -261,6 +275,7 @@ shared/
 
 ## 🏆 Requirements Checklist
 
+### Core Requirements
 - ✅ Real-time email sync (IMAP IDLE mode)
 - ✅ Multiple account support (2+)
 - ✅ Last 30 days of emails fetched
@@ -273,6 +288,13 @@ shared/
 - ✅ AI category visualization
 - ✅ Search functionality powered by Elasticsearch
 - ✅ AI-Powered Suggested Replies with RAG (Vector Database)
+
+### Advanced Features
+- ✅ Real-time search UI with loading indicators
+- ✅ Delete email with confirmation dialog
+- ✅ Forward email with validation
+- ✅ Auto-reply with AI suggestions
+- ✅ Bulk email categorization with multi-select
 
 ## 🤝 Contributing
 
